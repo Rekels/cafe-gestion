@@ -1,0 +1,28 @@
+import sqlite3 from 'sqlite3';
+import { open, Database } from 'sqlite';
+import path from 'path';
+
+const dbPath = path.join(process.cwd(), 'data', 'cafe_gestion.db');
+
+let dbPromise: Promise<Database<sqlite3.Database, sqlite3.Statement>>;
+
+if (process.env.NODE_ENV === 'development') {
+  let globalWithDb = global as typeof globalThis & {
+    _dbPromise?: Promise<Database<sqlite3.Database, sqlite3.Statement>>;
+  };
+
+  if (!globalWithDb._dbPromise) {
+    globalWithDb._dbPromise = open({
+      filename: dbPath,
+      driver: sqlite3.Database
+    });
+  }
+  dbPromise = globalWithDb._dbPromise;
+} else {
+  dbPromise = open({
+    filename: dbPath,
+    driver: sqlite3.Database
+  });
+}
+
+export default dbPromise;
