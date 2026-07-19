@@ -25,7 +25,30 @@ interface LoteInfo {
   productor?: string;
   stock_real?: number;
   stock_tostado?: number;
+  estado?: string;
 }
+
+const getEstadoLabel = (estado?: string) => {
+  if (!estado) return 'DESCONOCIDO';
+  const e = estado.toLowerCase();
+  if (e.includes('tostado')) return 'TOSTADO';
+  if (e.includes('pergamino')) return 'PERGAMINO';
+  if (e.includes('seleccionado')) return 'ORO VERDE SELECCIONADO';
+  if (e.includes('oro verde') || e.includes('bruto')) return 'ORO VERDE';
+  if (e.includes('molido')) return 'MOLIDO';
+  return estado.toUpperCase();
+};
+
+const getEstadoColor = (label: string) => {
+  switch (label) {
+    case 'TOSTADO': return 'bg-amber-900/40 text-amber-500 border-amber-700/50';
+    case 'PERGAMINO': return 'bg-yellow-900/40 text-yellow-500 border-yellow-700/50';
+    case 'ORO VERDE SELECCIONADO': return 'bg-emerald-900/40 text-emerald-400 border-emerald-700/50';
+    case 'ORO VERDE': return 'bg-green-900/40 text-green-500 border-green-700/50';
+    case 'MOLIDO': return 'bg-stone-900/40 text-stone-400 border-stone-700/50';
+    default: return 'bg-gray-800 text-gray-400 border-gray-600';
+  }
+};
 
 export default function AddServiceModal({ 
   onClose, 
@@ -103,6 +126,17 @@ export default function AddServiceModal({
   const [envasadoPrecio, setEnvasadoPrecio] = useState<string>('');
   const [envasadoCantidad, setEnvasadoCantidad] = useState<string>('');
   const [envasadoTipo, setEnvasadoTipo] = useState<string>('grano');
+
+  const getAllowedEstados = () => {
+    if (hasTrillado) return ['PERGAMINO'];
+    if (hasSeleccion) return ['ORO VERDE', 'PERGAMINO'];
+    if (hasTueste) return ['ORO VERDE', 'ORO VERDE SELECCIONADO'];
+    if (hasMolienda) return ['TOSTADO'];
+    if (hasEnvasado) return ['TOSTADO', 'MOLIDO'];
+    return null;
+  };
+
+  const allowedEstados = getAllowedEstados();
 
   const filteredClients = clientes.filter(c => 
     c.nombre.toLowerCase().includes(clientSearchQuery.toLowerCase()) ||
@@ -388,13 +422,22 @@ export default function AddServiceModal({
                     <div className="fixed inset-0 z-10" onClick={() => setIsLoteDropdownOpen(false)} />
                     <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-[#1a120b] border border-white/10 rounded-xl shadow-2xl z-20 divide-y divide-white/5">
                       {localLotes
+                        .filter(l => {
+                          if (allowedEstados) {
+                            const lbl = getEstadoLabel(l.estado);
+                            if (!allowedEstados.includes(lbl)) return false;
+                          }
+                          return true;
+                        })
                         .filter(l =>
                           (l.codigo_lote || '').toLowerCase().includes(loteSearchQuery.toLowerCase()) ||
                           (l.variedad || '').toLowerCase().includes(loteSearchQuery.toLowerCase()) ||
                           (l.proceso || '').toLowerCase().includes(loteSearchQuery.toLowerCase()) ||
                           (l.productor || '').toLowerCase().includes(loteSearchQuery.toLowerCase())
                         )
-                        .map(l => (
+                        .map(l => {
+                          const estadoLbl = getEstadoLabel(l.estado);
+                          return (
                           <div
                             key={l.id}
                             onClick={() => {
@@ -410,18 +453,28 @@ export default function AddServiceModal({
                           >
                             <div className="font-bold text-[#c2a077] font-mono uppercase">{l.codigo_lote}</div>
                             <div className="text-[10px] text-gray-400 mt-0.5 uppercase flex items-center gap-1.5 flex-wrap">
-                              {l.variedad || 'Sin Variedad'} • <ProcessBadge proceso={l.proceso} /> • {l.productor || 'Sin Productor'}
+                              <span className={`px-1.5 py-0.5 rounded border text-[9px] font-bold tracking-wider ${getEstadoColor(estadoLbl)}`}>
+                                {estadoLbl}
+                              </span>
+                              • {l.variedad || 'Sin Variedad'} • <ProcessBadge proceso={l.proceso} /> • {l.productor || 'Sin Productor'}
                             </div>
                           </div>
-                        ))}
-                      {localLotes.filter(l =>
+                          );
+                        })}
+                      {localLotes.filter(l => {
+                          if (allowedEstados) {
+                            const lbl = getEstadoLabel(l.estado);
+                            if (!allowedEstados.includes(lbl)) return false;
+                          }
+                          return true;
+                        }).filter(l =>
                         (l.codigo_lote || '').toLowerCase().includes(loteSearchQuery.toLowerCase()) ||
                         (l.variedad || '').toLowerCase().includes(loteSearchQuery.toLowerCase()) ||
                         (l.proceso || '').toLowerCase().includes(loteSearchQuery.toLowerCase()) ||
                         (l.productor || '').toLowerCase().includes(loteSearchQuery.toLowerCase())
                       ).length === 0 && (
                         <div className="p-3 text-gray-500 text-xs italic">
-                          No se encontraron lotes. Puedes crear uno nuevo.
+                          No se encontraron lotes con los filtros actuales. Puedes crear uno nuevo.
                         </div>
                       )}
                     </div>
