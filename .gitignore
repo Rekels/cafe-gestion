@@ -1,6 +1,7 @@
 # Data and databases
 *.csv
 *.db
+!web-app/data/cafe_gestion.db
 *.sqlite
 *.sqlite3
 
