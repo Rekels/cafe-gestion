@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import ExportActions from './ExportActions'
@@ -47,6 +47,12 @@ export default function ServicioDetailClient({
   const [showTrilladoModal, setShowTrilladoModal] = useState(false);
   const [showSeleccionModal, setShowSeleccionModal] = useState(false);
 
+  useEffect(() => {
+    if (servicio?.n_orden) {
+      document.title = `${servicio.n_orden} - ${servicio.cliente || 'Servicio'}`
+    }
+  }, [servicio?.n_orden, servicio?.cliente])
+
   const handleProgramarTueste = () => {
     startTransition(async () => {
       const res = await crearSesionYProgramarTueste(servicio.id);
@@ -91,6 +97,13 @@ export default function ServicioDetailClient({
   function formatMoney(amount: number | null | undefined) {
     if (amount === null || amount === undefined) return '-';
     return `S/ ${amount.toFixed(2)}`;
+  }
+
+  function formatKg(amount: number | null | undefined) {
+    if (amount === null || amount === undefined || isNaN(Number(amount))) return '-';
+    const num = Number(amount);
+    if (num === 0) return '-';
+    return `${parseFloat(num.toFixed(3))} kg`;
   }
 
   function calcMerma(initial: number | null, final: number | null) {
@@ -316,18 +329,18 @@ export default function ServicioDetailClient({
                   {/* Row: PESO IN */}
                   <tr className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-4 font-bold text-slate-700 print:text-black border-r border-slate-200 print:border-black">PESO IN (KG)</td>
-                    <td className="p-4 text-center font-medium bg-slate-50/50 print:bg-transparent">{hasTrillado ? `${pc} kg` : '-'}</td>
-                    <td className="p-4 text-center font-medium bg-slate-50/50 print:bg-transparent">{hasSeleccion ? `${selectionInput} kg` : '-'}</td>
-                    <td className="p-4 text-center font-medium bg-slate-50/50 print:bg-transparent">{hasTueste ? `${gc} kg` : '-'}</td>
-                    <td className="p-4 text-center font-medium bg-slate-50/50 print:bg-transparent">{hasMolienda ? `${totalMoliendaWeight} kg` : '-'}</td>
+                    <td className="p-4 text-center font-medium bg-slate-50/50 print:bg-transparent">{hasTrillado ? formatKg(pc) : '-'}</td>
+                    <td className="p-4 text-center font-medium bg-slate-50/50 print:bg-transparent">{hasSeleccion ? formatKg(selectionInput) : '-'}</td>
+                    <td className="p-4 text-center font-medium bg-slate-50/50 print:bg-transparent">{hasTueste ? formatKg(gc) : '-'}</td>
+                    <td className="p-4 text-center font-medium bg-slate-50/50 print:bg-transparent">{hasMolienda ? formatKg(totalMoliendaWeight) : '-'}</td>
                   </tr>
 
                   {/* Row: PESO OUT */}
                   <tr className="hover:bg-slate-50/50 transition-colors">
                     <td className="p-4 font-bold text-slate-700 print:text-black border-r border-slate-200 print:border-black">PESO OUT (KG)</td>
-                    <td className="p-4 text-center font-medium">{hasTrillado ? `${hc} kg` : '-'}</td>
+                    <td className="p-4 text-center font-medium">{hasTrillado ? formatKg(hc) : '-'}</td>
                     <td className="p-4 text-center font-medium">-</td>
-                    <td className="p-4 text-center font-medium">{hasTueste && rc > 0 ? `${rc} kg` : '-'}</td>
+                    <td className="p-4 text-center font-medium">{hasTueste && rc > 0 ? formatKg(rc) : '-'}</td>
                     <td className="p-4 text-center font-medium">-</td>
                   </tr>
 

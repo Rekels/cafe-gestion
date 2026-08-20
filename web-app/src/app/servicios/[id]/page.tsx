@@ -5,6 +5,21 @@ import { getGlobalAjustes } from '@/app/actions'
 
 export const dynamic = 'force-dynamic'
 
+export async function generateMetadata({ 
+  params 
+}: { 
+  params: Promise<{ id: string }> 
+}) {
+  const db = await dbPromise;
+  const resolvedParams = await params;
+  const decodedId = decodeURIComponent(resolvedParams.id);
+  const servicio = await db.get('SELECT n_orden, cliente FROM Servicios WHERE n_orden = ? OR id = ? LIMIT 1', [decodedId, decodedId]);
+  if (!servicio) return { title: 'Servicio - Pantiwayta' };
+  return {
+    title: `${servicio.n_orden} - ${servicio.cliente || 'Servicio'}`,
+  };
+}
+
 export default async function ServicioResumenPage({ 
   params 
 }: { 
@@ -31,54 +46,51 @@ export default async function ServicioResumenPage({
     );
   }
   
-  // 2. Fetch Client Info
-  let clienteInfo = null;
-  if (servicio.cliente) {
-    clienteInfo = await db.get('SELECT * FROM Clientes WHERE nombre = ?', [servicio.cliente.toUpperCase()]);
-  }
+  // 2. Fetch all dependent data concurrently
+  const [
+    clienteInfo,
+    clientes,
+    globalAjustes,
+    linkedRoastOrder,
+    lotes,
+    activeSessions,
+    movimientos,
+    bolsas,
+    ordenEnvasado,
+    linkedProforma
+  ] = await Promise.all([
+    servicio.cliente 
+      ? db.get('SELECT * FROM Clientes WHERE nombre = ?', [servicio.cliente.toUpperCase()])
+      : Promise.resolve(null),
+    db.all('SELECT * FROM Clientes ORDER BY nombre ASC'),
+    getGlobalAjustes(),
+    db.get('SELECT id, sesion_id, moisture, density, aw FROM OrdenesTueste WHERE servicio_id = ? LIMIT 1', [servicio.id]),
+    db.all('SELECT * FROM Lotes ORDER BY codigo_lote ASC'),
+    db.all(`
+      SELECT s.id, s.fecha, e.nombre as equipo_nombre,
+             (SELECT GROUP_CONCAT(DISTINCT UPPER(o.cliente)) FROM OrdenesTueste o WHERE o.sesion_id = s.id) as clientes
+      FROM SesionesTueste s
+      LEFT JOIN Equipos e ON s.equipo_id = e.id
+      WHERE s.estado = 'activa'
+      ORDER BY s.fecha DESC
+    `),
+    servicio.lote_id
+      ? db.all('SELECT * FROM MovimientosStock WHERE lote_id = ? ORDER BY id DESC', [servicio.lote_id])
+      : Promise.resolve([]),
+    db.all('SELECT * FROM CatalogoBolsas ORDER BY nombre ASC'),
+    db.get('SELECT * FROM OrdenesEnvasado WHERE servicio_id = ?', [servicio.id]),
+    servicio.proforma_id
+      ? db.get('SELECT * FROM Proformas WHERE id = ?', [servicio.proforma_id])
+      : Promise.resolve(null)
+  ]);
 
-  const clientes = await db.all('SELECT * FROM Clientes ORDER BY nombre ASC');
-  const globalAjustes = await getGlobalAjustes();
-
-  // 3. Fetch linked roast order if scheduled
-  const linkedRoastOrder = await db.get('SELECT id, sesion_id, moisture, density, aw FROM OrdenesTueste WHERE servicio_id = ? LIMIT 1', [servicio.id]);
-
-  // 4. Fetch lotes
-  const lotes = await db.all('SELECT * FROM Lotes ORDER BY codigo_lote ASC');
-
-  // 5. Fetch active sessions
-  const activeSessions = await db.all(`
-    SELECT s.id, s.fecha, e.nombre as equipo_nombre,
-           (SELECT GROUP_CONCAT(DISTINCT UPPER(o.cliente)) FROM OrdenesTueste o WHERE o.sesion_id = s.id) as clientes
-    FROM SesionesTueste s
-    LEFT JOIN Equipos e ON s.equipo_id = e.id
-    WHERE s.estado = 'activa'
-    ORDER BY s.fecha DESC
-  `);
-
-  // 6. Fetch lot movements
-  let movimientos: any[] = [];
-  if (servicio.lote_id) {
-    movimientos = await db.all(
-      'SELECT * FROM MovimientosStock WHERE lote_id = ? ORDER BY id DESC',
-      [servicio.lote_id]
-    );
-  }
-
-  // 7. Fetch Envasado Data
-  const bolsas = await db.all('SELECT * FROM CatalogoBolsas ORDER BY nombre ASC');
-  let ordenEnvasado = await db.get('SELECT * FROM OrdenesEnvasado WHERE servicio_id = ?', [servicio.id]);
-  let paquetesEnvasado = [];
-  let detallesEnvasado = [];
-  
+  let paquetesEnvasado: any[] = [];
+  let detallesEnvasado: any[] = [];
   if (ordenEnvasado) {
-    paquetesEnvasado = await db.all('SELECT * FROM PaquetesEnvio WHERE orden_envasado_id = ?', [ordenEnvasado.id]);
-    detallesEnvasado = await db.all('SELECT * FROM OrdenesEnvasado_Detalle WHERE orden_envasado_id = ?', [ordenEnvasado.id]);
-  }
-
-  let linkedProforma = null;
-  if (servicio.proforma_id) {
-    linkedProforma = await db.get('SELECT * FROM Proformas WHERE id = ?', [servicio.proforma_id]);
+    [paquetesEnvasado, detallesEnvasado] = await Promise.all([
+      db.all('SELECT * FROM PaquetesEnvio WHERE orden_envasado_id = ?', [ordenEnvasado.id]),
+      db.all('SELECT * FROM OrdenesEnvasado_Detalle WHERE orden_envasado_id = ?', [ordenEnvasado.id])
+    ]);
   }
 
   return (

@@ -134,14 +134,17 @@ export default function ProformaDetailClient({
     })
   }
 
+  useEffect(() => {
+    if (proforma?.n_proforma && proforma?.cliente) {
+      document.title = `${proforma.n_proforma} - ${proforma.cliente}`
+    }
+  }, [proforma?.n_proforma, proforma?.cliente])
+
   // Handle printing
   const handlePrint = () => {
-    const oldTitle = document.title
-    document.title = `Proforma-${proforma.n_proforma}-${proforma.cliente.replace(/\s+/g, '_')}`
+    const defaultTitle = `${proforma.n_proforma} - ${proforma.cliente}`
+    document.title = defaultTitle
     window.print()
-    setTimeout(() => {
-      document.title = oldTitle
-    }, 1000)
   }
 
   // Get status pill class
@@ -585,6 +588,13 @@ export default function ProformaDetailClient({
                   return `S/ ${val.toFixed(2)}`;
                 };
 
+                const formatKg = (val: number | null | undefined) => {
+                  if (val === null || val === undefined || isNaN(Number(val))) return '-';
+                  const num = Number(val);
+                  if (num === 0) return '-';
+                  return `${parseFloat(num.toFixed(3))} kg`;
+                };
+
                 return (
                   <div 
                     key={s.id} 
@@ -653,17 +663,17 @@ export default function ProformaDetailClient({
                           {/* PESO IN */}
                           <tr>
                             <td className="p-3 font-bold text-white print:text-black border-r border-white/5 print:border-black">PESO IN (KG)</td>
-                            <td className="p-3 text-center">{hasTrillado ? `${pc} kg` : '-'}</td>
-                            <td className="p-3 text-center">{hasSeleccion ? `${selectionInput} kg` : '-'}</td>
-                            <td className="p-3 text-center">{hasTueste ? `${gc} kg` : '-'}</td>
-                            <td className="p-3 text-center">{hasMolienda ? `${totalMoliendaWeight} kg` : '-'}</td>
+                            <td className="p-3 text-center">{hasTrillado ? formatKg(pc) : '-'}</td>
+                            <td className="p-3 text-center">{hasSeleccion ? formatKg(selectionInput) : '-'}</td>
+                            <td className="p-3 text-center">{hasTueste ? formatKg(gc) : '-'}</td>
+                            <td className="p-3 text-center">{hasMolienda ? formatKg(totalMoliendaWeight) : '-'}</td>
                           </tr>
                           {/* PESO OUT */}
                           <tr>
                             <td className="p-3 font-bold text-white print:text-black border-r border-white/5 print:border-black">PESO OUT (KG)</td>
-                            <td className="p-3 text-center">{hasTrillado ? `${hc} kg` : '-'}</td>
+                            <td className="p-3 text-center">{hasTrillado ? formatKg(hc) : '-'}</td>
                             <td className="p-3 text-center">-</td>
-                            <td className="p-3 text-center">{hasTueste && rc > 0 ? `${rc} kg` : '-'}</td>
+                            <td className="p-3 text-center">{hasTueste && rc > 0 ? formatKg(rc) : '-'}</td>
                             <td className="p-3 text-center">-</td>
                           </tr>
                           {/* MERMA */}

@@ -7,14 +7,12 @@ export const dynamic = 'force-dynamic'
 export default async function ProformasPage() {
   const db = await dbPromise;
 
-  // Fetch all proformas
-  const proformas = await getProformas();
-
-  // Fetch all clients for client selector
-  const clientes = await db.all('SELECT * FROM Clientes ORDER BY nombre ASC');
-
-  // Fetch predefined concepts
-  const conceptosPredefinidos = await getConceptosPredefinidos();
+  // Parallelize fetches
+  const [proformas, clientes, conceptosPredefinidos] = await Promise.all([
+    getProformas(),
+    db.all('SELECT * FROM Clientes ORDER BY nombre ASC'),
+    getConceptosPredefinidos()
+  ]);
 
   return (
     <ProformasClient

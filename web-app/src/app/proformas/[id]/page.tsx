@@ -6,6 +6,22 @@ import ProformaDetailClient from './ProformaDetailClient'
 
 export const dynamic = 'force-dynamic'
 
+export async function generateMetadata({
+  params
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const resolvedParams = await params;
+  const id = Number(resolvedParams.id);
+  const proforma = await getProformaById(id);
+  if (!proforma) {
+    return { title: 'Proforma - Pantiwayta' };
+  }
+  return {
+    title: `${proforma.n_proforma} - ${proforma.cliente}`,
+  };
+}
+
 export default async function ProformaDetailPage({
   params
 }: {
@@ -32,17 +48,14 @@ export default async function ProformaDetailPage({
     );
   }
 
-  // 2. Fetch Client Info (RUC, email, phone) if available
-  let clienteInfo = null;
-  if (proforma.cliente) {
-    clienteInfo = await db.get('SELECT * FROM Clientes WHERE nombre = ?', [proforma.cliente.toUpperCase()]);
-  }
-
-  // 3. Fetch corporate header info from Ajustes
-  const globalAjustes = await getGlobalAjustes();
-
-  // 4. Fetch predefined concepts for the edit modal
-  const conceptosPredefinidos = await getConceptosPredefinidos();
+  // 2. Fetch Client Info, corporate header info and predefined concepts in parallel
+  const [clienteInfo, globalAjustes, conceptosPredefinidos] = await Promise.all([
+    proforma.cliente 
+      ? db.get('SELECT * FROM Clientes WHERE nombre = ?', [proforma.cliente.toUpperCase()])
+      : Promise.resolve(null),
+    getGlobalAjustes(),
+    getConceptosPredefinidos()
+  ]);
 
   return (
     <ProformaDetailClient

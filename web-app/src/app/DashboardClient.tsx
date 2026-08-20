@@ -147,7 +147,7 @@ export default function DashboardClient() {
                   <PieChart>
                     <Pie data={data.productosMasVendidos} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
                       {data.productosMasVendidos.map((entry, index) => (
-                        <Cell key={`cell-\${index}`} fill={COLORS[index % COLORS.length]} />
+                        <Cell key={`prod-cell-${entry.name}-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip contentStyle={{ backgroundColor: '#1a120b', borderColor: 'rgba(255,255,255,0.1)' }} />
@@ -179,7 +179,7 @@ export default function DashboardClient() {
                   <PieChart>
                     <Pie data={data.estadoProformas} innerRadius={50} outerRadius={70} paddingAngle={2} dataKey="value">
                       {data.estadoProformas.map((entry, index) => (
-                        <Cell key={`cell-\${index}`} fill={COLORS[(index + 4) % COLORS.length]} />
+                        <Cell key={`estado-cell-${entry.name}-${index}`} fill={COLORS[(index + 4) % COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip contentStyle={{ backgroundColor: '#1a120b', borderColor: 'rgba(255,255,255,0.1)' }} />
@@ -210,7 +210,7 @@ export default function DashboardClient() {
                   <PieChart>
                     <Pie data={data.categoriasMasVendidas} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
                       {data.categoriasMasVendidas.map((entry, index) => (
-                        <Cell key={`cell-\${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
+                        <Cell key={`cat-cell-${entry.name}-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
                       ))}
                     </Pie>
                     <Tooltip contentStyle={{ backgroundColor: '#1a120b', borderColor: 'rgba(255,255,255,0.1)' }} />
