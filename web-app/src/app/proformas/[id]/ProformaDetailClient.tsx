@@ -6,6 +6,8 @@ import { formatDateLatino } from '@/lib/dateUtils'
 import { useRouter } from 'next/navigation'
 import { updateProforma, updateProformaEstado, getPendingServiciosByCliente } from '../actions'
 import ProcessBadge from '@/components/ProcessBadge'
+import DatePicker from 'react-datepicker'
+import { format } from 'date-fns'
 
 interface ProformaConcept {
   id: number
@@ -787,8 +789,8 @@ function EditProformaModal({
 
   // Metadata
   const [descuento, setDescuento] = useState<string>(String(proforma.descuento))
-  const [fechaEmision, setFechaEmision] = useState(proforma.fecha_emision)
-  const [fechaVencimiento, setFechaVencimiento] = useState(proforma.fecha_vencimiento || '')
+  const [fechaEmision, setFechaEmision] = useState<Date>(new Date(proforma.fecha_emision + 'T00:00:00'))
+  const [fechaVencimiento, setFechaVencimiento] = useState<Date | null>(proforma.fecha_vencimiento ? new Date(proforma.fecha_vencimiento + 'T00:00:00') : null)
   const [notas, setNotas] = useState(proforma.notas || '')
 
   // Fetch candidate services
@@ -869,8 +871,8 @@ function EditProformaModal({
       const res = await updateProforma(
         proforma.id,
         cliente,
-        fechaEmision,
-        fechaVencimiento || null,
+        format(fechaEmision, 'yyyy-MM-dd'),
+        fechaVencimiento ? format(fechaVencimiento, 'yyyy-MM-dd') : null,
         discountVal,
         notas,
         cleanConceptos,
@@ -922,12 +924,11 @@ function EditProformaModal({
                 <label className="block text-xs font-semibold text-gray-400 mb-1">
                   Fecha de Emisión
                 </label>
-                <input
-                  type="date"
-                  value={fechaEmision}
-                  onChange={(e) => setFechaEmision(e.target.value)}
-                  required
-                  className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                <DatePicker
+                  selected={fechaEmision}
+                  onChange={(date: Date | null) => date && setFechaEmision(date)}
+                  dateFormat="dd/MM/yy"
+                  className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#c2a077] cursor-pointer"
                 />
               </div>
 
@@ -935,11 +936,13 @@ function EditProformaModal({
                 <label className="block text-xs font-semibold text-gray-400 mb-1">
                   Fecha de Vencimiento (Opcional)
                 </label>
-                <input
-                  type="date"
-                  value={fechaVencimiento}
-                  onChange={(e) => setFechaVencimiento(e.target.value)}
-                  className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                <DatePicker
+                  selected={fechaVencimiento}
+                  onChange={(date: Date | null) => setFechaVencimiento(date)}
+                  dateFormat="dd/MM/yy"
+                  isClearable
+                  placeholderText="Seleccionar fecha"
+                  className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#c2a077] cursor-pointer"
                 />
               </div>
 

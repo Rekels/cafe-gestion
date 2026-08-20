@@ -138,9 +138,10 @@ export async function finalizarSesion(sesionId: number) {
 
         // Move stock
         if (batch.codigo_lote) {
-          const lote = await db.get('SELECT id, stock_real, stock_tostado FROM Lotes WHERE codigo_lote = ?', [batch.codigo_lote]);
+          const lote = await db.get('SELECT id, stock_real, stock_tostado, peso_kg FROM Lotes WHERE codigo_lote = ?', [batch.codigo_lote]);
           if (lote) {
-            const newStockReal = (lote.stock_real || 0) - gc;
+            const currentStock = lote.peso_kg ?? lote.stock_real ?? 0;
+            const newStockReal = currentStock - gc;
             const newStockTostado = (lote.stock_tostado || 0) + rc;
             await db.run('UPDATE Lotes SET stock_real = ?, stock_tostado = ? WHERE id = ?', [newStockReal, newStockTostado, lote.id]);
           }
@@ -156,6 +157,8 @@ export async function finalizarSesion(sesionId: number) {
         if (link && link.servicio_id) {
           await syncServicioFromRoasting(db, link.servicio_id, link.orden_id, link.fecha);
         }
+      } else if (gc > 0 && rc <= 0) {
+        return { success: false, error: 'No se puede finalizar: hay tuestes con peso verde asignado pero sin peso tostado (RC).' };
       }
     }
 
@@ -207,7 +210,7 @@ export async function addOrdenTueste(sesionId: number, formData: FormData) {
       }
     }
 
-    const target_weight = Number(formData.get('target_weight') || 0);
+    const target_weight = Number(formData.get('target_weight_calc') || formData.get('target_weight') || 0);
     const partitions = Number(formData.get('partitions') || 1);
     const moisture = formData.get('moisture') ? Number(formData.get('moisture')) : null;
     const density = formData.get('density') ? Number(formData.get('density')) : null;
@@ -228,15 +231,65 @@ export async function addOrdenTueste(sesionId: number, formData: FormData) {
       const existingLote = await db.get('SELECT id FROM Lotes WHERE codigo_lote = ?', [codigo_lote]);
       if (!existingLote) {
         await db.run(
-          'INSERT INTO Lotes (codigo_lote, variedad, proceso, productor, stock_real, stock_tostado) VALUES (?, ?, ?, ?, ?, 0)',
-          [codigo_lote, variedad, proceso, productor, target_weight]
+          'INSERT INTO Lotes (codigo_lote, variedad, proceso, productor, estado_actual, peso_kg, stock_real, stock_tostado) VALUES (?, ?, ?, ?, ?, ?, ?, 0)',
+          [codigo_lote, variedad, proceso, productor, 'Oro Verde', target_weight, target_weight]
         );
       }
     } else {
-      const lote = await db.get('SELECT variedad, proceso, productor FROM Lotes WHERE codigo_lote = ?', [codigo_lote]);
-      variedad = lote?.variedad || '';
-      proceso = lote?.proceso || '';
-      productor = lote?.productor || '';
+      const lotesOrigenRaw = formData.get('lotes_origen') as string || '[]';
+      const lotesData = JSON.parse(lotesOrigenRaw);
+
+      if (lotesData.length === 1) {
+        // Single Lot
+        const l = lotesData[0];
+        codigo_lote = l.codigo_lote;
+        variedad = l.variedad;
+        proceso = l.proceso;
+        productor = l.productor;
+      } else if (lotesData.length > 1) {
+        // Blend or Consolidation
+        const varieties = Array.from(new Set(lotesData.map((l: any) => l.variedad).filter(Boolean)));
+        const processes = Array.from(new Set(lotesData.map((l: any) => l.proceso).filter(Boolean)));
+        const producers = Array.from(new Set(lotesData.map((l: any) => l.productor).filter(Boolean)));
+        
+        variedad = varieties.length === 1 ? varieties[0] as string : 'Blend';
+        proceso = processes.length === 1 ? processes[0] as string : 'Blend';
+        productor = producers.join(', ');
+
+        const isConsolidation = varieties.length === 1 && processes.length === 1 && producers.length === 1;
+        const prefix = isConsolidation ? 'CONS' : 'BLEND';
+        
+        // Generate a new code for the blend/consolidation
+        codigo_lote = `${prefix}-${Date.now().toString().slice(-6)}`;
+        
+        // Create the new physical Lot for this blend BEFORE roasting
+        const resultLote = await db.run(
+          'INSERT INTO Lotes (codigo_lote, variedad, proceso, productor, estado_actual, peso_kg, stock_real) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [codigo_lote, variedad, proceso, productor, 'Oro Verde Mezclado', target_weight, target_weight]
+        );
+        const newLoteId = resultLote.lastID;
+
+        // Trace the blend in Lotes_Origenes and deduct from parents
+        for (const lot of lotesData) {
+          if (lot.peso > 0) {
+            // Mapping
+            await db.run(
+              'INSERT INTO Lotes_Origenes (lote_destino_id, lote_origen_id, cantidad_kg) VALUES (?, ?, ?)',
+              [newLoteId, lot.id, lot.peso]
+            );
+            // Deduct stock
+            await db.run(
+              'UPDATE Lotes SET stock_real = COALESCE(stock_real, peso_kg) - ? WHERE id = ?',
+              [lot.peso, lot.id]
+            );
+            // Log Movimiento
+            await db.run(`
+              INSERT INTO MovimientosStock (lote_id, fecha, tipo_movimiento, tipo_cafe, cantidad, motivo)
+              VALUES (?, DATE('now'), 'salida', 'oro_verde_bruto', ?, 'Mezcla/Consolidacion hacia ${codigo_lote}')
+            `, [lot.id, lot.peso]);
+          }
+        }
+      }
     }
 
     // Get current max orden_visual for this session
@@ -512,9 +565,10 @@ export async function completarBatch(batchId: number) {
 
     // Move stock only if transitioning from planned to completed
     if (oldEstado === 'planificado' && batch.codigo_lote) {
-      const lote = await db.get('SELECT id, stock_real, stock_tostado FROM Lotes WHERE codigo_lote = ?', [batch.codigo_lote]);
+      const lote = await db.get('SELECT id, stock_real, stock_tostado, peso_kg FROM Lotes WHERE codigo_lote = ?', [batch.codigo_lote]);
       if (lote) {
-        const newStockReal = (lote.stock_real || 0) - gc;
+        const currentStock = lote.peso_kg ?? lote.stock_real ?? 0;
+        const newStockReal = currentStock - gc;
         const newStockTostado = (lote.stock_tostado || 0) + rc;
         await db.run('UPDATE Lotes SET stock_real = ?, stock_tostado = ? WHERE id = ?', [newStockReal, newStockTostado, lote.id]);
       }
@@ -555,9 +609,10 @@ export async function revertirBatch(batchId: number) {
 
     // Revert stock
     if (batch.codigo_lote) {
-      const lote = await db.get('SELECT id, stock_real, stock_tostado FROM Lotes WHERE codigo_lote = ?', [batch.codigo_lote]);
+      const lote = await db.get('SELECT id, stock_real, stock_tostado, peso_kg FROM Lotes WHERE codigo_lote = ?', [batch.codigo_lote]);
       if (lote) {
-        const newStockReal = (lote.stock_real || 0) + gc;
+        const currentStock = lote.peso_kg ?? lote.stock_real ?? 0;
+        const newStockReal = currentStock + gc;
         const newStockTostado = (lote.stock_tostado || 0) - rc;
         await db.run('UPDATE Lotes SET stock_real = ?, stock_tostado = ? WHERE id = ?', [newStockReal, newStockTostado, lote.id]);
       }
@@ -628,9 +683,9 @@ export async function saveBatchTueste(batchId: number, batchData: any) {
     ]);
 
     if (codigo_lote) {
-      const lote = await db.get('SELECT id, stock_real, stock_tostado FROM Lotes WHERE codigo_lote = ?', [codigo_lote]);
+      const lote = await db.get('SELECT id, stock_real, stock_tostado, peso_kg FROM Lotes WHERE codigo_lote = ?', [codigo_lote]);
       if (lote) {
-        let newStockReal = lote.stock_real || 0;
+        let newStockReal = lote.peso_kg ?? lote.stock_real ?? 0;
         let newStockTostado = lote.stock_tostado || 0;
 
         if (oldEstado === 'planificado' && newEstado === 'completado') {

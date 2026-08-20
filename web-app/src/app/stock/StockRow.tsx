@@ -53,7 +53,7 @@ export default function StockRow({ lote, bolsas = [] }: { lote: any, bolsas?: an
           </label>
           <div>
             <span className="font-mono font-bold text-white block">{lote.codigo_lote}</span>
-            <span className="text-[10px] text-gray-500 block mt-1">ID: {lote.id} | Lote: {lote.n_lote}</span>
+            <span className="text-[10px] text-gray-500 block mt-1">ID: {lote.id} | Lote: {lote.n_lote}{lote.contenedor ? ` | Contenedor: ${lote.contenedor}` : ''}</span>
           </div>
         </div>
       </td>

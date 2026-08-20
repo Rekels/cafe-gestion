@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 export default async function NuevoTuestePage() {
   const db = await dbPromise;
   
-  const equipos = await db.all("SELECT id, nombre, tipo, capacidad_kg FROM Equipos WHERE activo = 1 ORDER BY nombre");
+  const equipos = await db.all("SELECT id, nombre, tipo, capacidad_kg FROM Equipos WHERE activo = 1 AND tipo = 'tostadora' ORDER BY nombre");
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-[#1a120b] via-[#2a1d13] to-[#1a120b] text-gray-100 p-6 md:p-12 font-sans selection:bg-[#c2a077]/30">

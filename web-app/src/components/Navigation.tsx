@@ -21,6 +21,7 @@ export default function Navigation() {
     { href: '/despachos', label: 'Despachos', icon: '📤' },
     { href: '/stock', label: 'Control de Stock', icon: '🏭' },
     { href: '/proformas', label: 'Proformas', icon: '📄' },
+    { href: '/reportes', label: 'Reportes', icon: '📊' },
     { href: '/catalogos', label: 'Catálogos', icon: '🗂️' },
     { href: '/ajustes', label: 'Tarifas', icon: '💰' },
   ];

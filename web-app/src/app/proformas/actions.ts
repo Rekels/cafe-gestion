@@ -368,10 +368,6 @@ export async function mergeProformas(ids: number[]) {
       }
     }
 
-    // 2. Generate a new n_proforma (e.g. PROF-2023-XXXX)
-    const count = await db.get('SELECT COUNT(*) as c FROM Proformas');
-    const n_proforma = `PROF-${new Date().getFullYear()}-${String(count.c + 1).padStart(4, '0')}`;
-    
     // Calculate new expiration date (e.g. 7 days from today)
     const fechaEmision = new Date().toISOString().split('T')[0];
     const fechaVencimiento = new Date();
@@ -380,11 +376,19 @@ export async function mergeProformas(ids: number[]) {
 
     // Create the master proforma with 0 totals initially
     const result = await db.run(`
-      INSERT INTO Proformas (n_proforma, cliente, fecha_emision, fecha_vencimiento, subtotal, descuento, total, estado, notas)
-      VALUES (?, ?, ?, ?, 0, 0, 0, 'borrador', ?)
-    `, [n_proforma, firstClient, fechaEmision, fechaVencimientoStr, `Proforma consolidada de: ${proformasToMerge.map(p => p.n_proforma).join(', ')}`]);
+      INSERT INTO Proformas (cliente, fecha_emision, fecha_vencimiento, subtotal, descuento, total, estado, notas)
+      VALUES (?, ?, ?, 0, 0, 0, 'Borrador', ?)
+    `, [firstClient, fechaEmision, fechaVencimientoStr, `Proforma consolidada de: ${proformasToMerge.map(p => p.n_proforma).join(', ')}`]);
 
     const newProformaId = result.lastID;
+    if (typeof newProformaId !== 'number') {
+      throw new Error('No se pudo crear la proforma consolidada');
+    }
+
+    // Generate official n_proforma correlative (PR-YYYY-XXXX)
+    const year = new Date().getFullYear();
+    const n_proforma = `PR-${year}-${String(newProformaId).padStart(4, '0')}`;
+    await db.run('UPDATE Proformas SET n_proforma = ? WHERE id = ?', [n_proforma, newProformaId]);
 
     // 3. Move ProformaConceptos to the new proforma
     await db.run(`UPDATE ProformaConceptos SET proforma_id = ? WHERE proforma_id IN (${placeholders})`, [newProformaId, ...ids]);

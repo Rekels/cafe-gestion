@@ -73,7 +73,7 @@ export default async function SesionControlPage({
   }
 
   // Fetch lotes and referencias for the AddOrderModal
-  const lotes = await db.all('SELECT id, codigo_lote, variedad, proceso, productor, stock_real FROM Lotes ORDER BY id DESC');
+  const lotes = await db.all("SELECT id, codigo_lote, variedad, proceso, productor, IFNULL(stock_real, peso_kg) as stock_real, propietario, cliente_id FROM Lotes WHERE activo = 1 AND estado_actual IN ('Oro Verde', 'Oro Verde Sin Seleccionar') ORDER BY id DESC");
   const referencias = await db.all(`
     SELECT id, variedad, proceso, productor, codigo_lote, fecha, nombre_referencia, agtron 
     FROM Tuestes WHERE es_referencia = 1 ORDER BY id DESC

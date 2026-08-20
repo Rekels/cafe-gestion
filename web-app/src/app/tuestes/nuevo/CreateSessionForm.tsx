@@ -4,14 +4,21 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createSesionTueste } from '../../actions'
 
+import DatePicker from 'react-datepicker'
+import { format } from 'date-fns'
+
 export default function CreateSessionForm({ equipos }: { equipos: any[] }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selectedEquipo, setSelectedEquipo] = useState<any>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    
+    // Add the correctly formatted date (YYYY-MM-DD) for SQLite
+    formData.set('fecha', format(selectedDate, 'yyyy-MM-dd'));
     
     startTransition(async () => {
       const res = await createSesionTueste(formData);
@@ -38,12 +45,11 @@ export default function CreateSessionForm({ equipos }: { equipos: any[] }) {
             <label className="block text-sm font-medium text-gray-400 mb-2">
               Fecha de Tueste *
             </label>
-            <input
-              type="date"
-              name="fecha"
-              required
-              defaultValue={new Date().toISOString().split('T')[0]}
-              className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#c2a077] transition-all text-base"
+            <DatePicker
+              selected={selectedDate}
+              onChange={(date: Date | null) => date && setSelectedDate(date)}
+              dateFormat="dd/MM/yy"
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#c2a077] transition-all text-base cursor-pointer"
             />
           </div>
 

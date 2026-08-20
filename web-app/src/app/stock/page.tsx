@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 export default async function StockPage() {
   const db = await dbPromise;
   const lotes = await db.all(`
-    SELECT L.*, IFNULL(L.peso_kg, 0) as stock_actual
+    SELECT L.*, COALESCE(L.stock_real, L.peso_kg, 0) as stock_actual
     FROM Lotes L
     WHERE L.activo = 1
     ORDER BY L.id DESC
@@ -41,7 +41,7 @@ export default async function StockPage() {
           </div>
         </div>
 
-        <StockTotales totales={totales} />
+        <StockTotales totales={totales} initialLotes={lotes} />
         <StockClient initialLotes={lotes} initialBolsas={lotesBolsas} />
 
       </div>

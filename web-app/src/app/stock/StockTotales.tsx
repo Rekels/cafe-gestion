@@ -2,9 +2,10 @@
 
 import React, { useState, useMemo } from 'react'
 
-export default function StockTotales({ totales }: { totales: any[] }) {
+export default function StockTotales({ totales, initialLotes = [] }: { totales: any[], initialLotes?: any[] }) {
   const [selectedPropietario, setSelectedPropietario] = useState('')
   const [selectedEstado, setSelectedEstado] = useState('')
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null)
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc' | 'none'>('none')
 
   const propietarioOptions = useMemo(() => {
@@ -95,29 +96,78 @@ export default function StockTotales({ totales }: { totales: any[] }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
-            {sortedTotales.map((t, i) => (
-              <tr key={i} className="hover:bg-white/[0.02] transition-colors">
-                <td className="p-3 text-sm font-medium text-gray-200">{t.propietario}</td>
-                <td className="p-3 text-xs text-gray-400">
-                  <span className="inline-flex px-2 py-0.5 rounded bg-[#c2a077]/10 text-[#c2a077] uppercase font-bold">
-                    {t.variedad || 'S/V'}
-                  </span>
-                </td>
-                <td className="p-3 text-xs text-gray-300">{t.productor || '-'}</td>
-                <td className="p-3 text-xs text-gray-400">{t.proceso || '-'}</td>
-                <td className="p-3 text-center">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/5 border border-white/10 text-gray-300">
-                    {t.estado_actual}
-                  </span>
-                </td>
-                <td className="p-3 text-center text-sm font-mono text-gray-400">
-                  {t.cantidad_contenedores}
-                </td>
-                <td className="p-3 text-right font-mono font-bold text-white bg-white/[0.01]">
-                  {Number(t.total_kg).toFixed(2)} kg
-                </td>
-              </tr>
-            ))}
+            {sortedTotales.map((t, i) => {
+              const hasManyContainers = Number(t.cantidad_contenedores) > 2;
+              const isExpanded = expandedIndex === i;
+              
+              return (
+              <React.Fragment key={i}>
+                <tr 
+                  className={`hover:bg-white/[0.02] transition-colors ${hasManyContainers ? 'cursor-pointer' : ''}`}
+                  onClick={() => {
+                    if (hasManyContainers) {
+                      setExpandedIndex(isExpanded ? null : i)
+                    }
+                  }}
+                >
+                  <td className="p-3 text-sm font-medium text-gray-200">{t.propietario}</td>
+                  <td className="p-3 text-xs text-gray-400">
+                    <span className="inline-flex px-2 py-0.5 rounded bg-[#c2a077]/10 text-[#c2a077] uppercase font-bold">
+                      {t.variedad || 'S/V'}
+                    </span>
+                  </td>
+                  <td className="p-3 text-xs text-gray-300">{t.productor || '-'}</td>
+                  <td className="p-3 text-xs text-gray-400">{t.proceso || '-'}</td>
+                  <td className="p-3 text-center">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/5 border border-white/10 text-gray-300">
+                      {t.estado_actual}
+                    </span>
+                  </td>
+                  <td className="p-3 text-center text-sm font-mono text-gray-400">
+                    <div className="flex items-center justify-center gap-1">
+                      {t.cantidad_contenedores}
+                      {hasManyContainers && (
+                        <span className="text-[10px] text-[#c2a077]">{isExpanded ? '▲' : '▼'}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="p-3 text-right font-mono font-bold text-white bg-white/[0.01]">
+                    {Number(t.total_kg).toFixed(2)} kg
+                  </td>
+                </tr>
+                {isExpanded && hasManyContainers && (
+                  <tr className="bg-white/[0.01] border-b border-white/5">
+                    <td colSpan={7} className="p-4 pl-12 border-l-2 border-l-[#c2a077]/50">
+                      <div className="flex flex-col gap-2">
+                        <span className="font-bold text-[#c2a077] text-xs">Detalle de Contenedores:</span>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                          {initialLotes
+                            .filter(l => 
+                              l.propietario === t.propietario &&
+                              (l.variedad || '') === (t.variedad || '') &&
+                              (l.productor || '') === (t.productor || '') &&
+                              (l.proceso || '') === (t.proceso || '') &&
+                              (l.estado_actual || '') === (t.estado_actual || '') &&
+                              (l.cosecha || '') === (t.cosecha || '')
+                            )
+                            .map(lote => (
+                              <div key={lote.id} className="bg-black/40 border border-white/10 px-3 py-2 rounded-lg flex flex-col justify-between">
+                                <div>
+                                  <span className="text-white font-medium text-xs block truncate" title={lote.n_lote || 'S/N'}>Lote: {lote.n_lote || 'S/N'}</span>
+                                  {lote.contenedor && <span className="text-gray-400 text-[10px] block">Cont: {lote.contenedor}</span>}
+                                </div>
+                                <span className="text-[#c2a077] font-mono font-bold text-xs mt-1 border-t border-white/10 pt-1">
+                                  {Number(lote.stock_actual).toFixed(2)} kg
+                                </span>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            )})}
             {filteredTotales.length === 0 && (
               <tr>
                 <td colSpan={7} className="p-8 text-center text-gray-400">

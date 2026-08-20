@@ -13,50 +13,51 @@ interface AddOrderModalProps {
   equipoCapacidad?: number
 }
 
-interface SelectedLote {
-  lote: any;
-  weight: number | '';
-}
-
 export default function AddOrderModal({ sesionId, lotes, referencias, clientes, onClose, onCreated, equipoCapacidad }: AddOrderModalProps) {
   const [isPending, startTransition] = useTransition();
   
   const [loteSearchQuery, setLoteSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  
-  const [selectedLotes, setSelectedLotes] = useState<SelectedLote[]>([]);
+  const [selectedLoteCode, setSelectedLoteCode] = useState('');
+  const [selectedLote, setSelectedLote] = useState<any>(null);
   
   const [isNewLote, setIsNewLote] = useState(false);
   
+  const [targetWeight, setTargetWeight] = useState<number | ''>('');
   const [partitions, setPartitions] = useState<number | ''>(1);
   const [isPartitionsModified, setIsPartitionsModified] = useState(false);
   const [refSearch, setRefSearch] = useState('');
   const [clienteDestino, setClienteDestino] = useState('PANTIWAYTA');
 
-  const handleLoteSelect = (l: any) => {
-    if (!selectedLotes.find(sl => sl.lote.id === l.id)) {
-      setSelectedLotes([...selectedLotes, { lote: l, weight: '' }]);
-      
-      // Auto-set client to owner if it's the first lot selected
-      if (selectedLotes.length === 0 && l.propietario) {
-        setClienteDestino(l.propietario);
-      }
+  const handleWeightChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value === '' ? '' : Number(e.target.value);
+    setTargetWeight(val);
+    if (val !== '' && equipoCapacidad && equipoCapacidad > 0 && !isPartitionsModified) {
+      const suggested = Math.ceil(Number(val) / equipoCapacidad);
+      setPartitions(suggested);
     }
-    setLoteSearchQuery('');
+  };
+
+  const handlePartitionsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPartitions(e.target.value === '' ? '' : Number(e.target.value));
+    setIsPartitionsModified(true);
+  };
+
+  const handleLoteSelect = (l: any) => {
+    setSelectedLoteCode(l.codigo_lote);
+    setSelectedLote(l);
+    setLoteSearchQuery(`${l.codigo_lote} (${l.variedad} - ${l.productor})`);
     setIsDropdownOpen(false);
-  };
-
-  const handleRemoveLote = (id: number) => {
-    setSelectedLotes(selectedLotes.filter(sl => sl.lote.id !== id));
-  };
-
-  const handleWeightChange = (id: number, val: string) => {
-    const num = val === '' ? '' : Number(val);
-    setSelectedLotes(selectedLotes.map(sl => sl.lote.id === id ? { ...sl, weight: num } : sl));
+    if (l.propietario) {
+      setClienteDestino(l.propietario);
+    }
   };
 
   const filteredLotes = lotes.filter(l => {
     const q = loteSearchQuery.toLowerCase();
+    if (selectedLote && loteSearchQuery === `${selectedLote.codigo_lote} (${selectedLote.variedad} - ${selectedLote.productor})`) {
+      return true;
+    }
     return (
       l.codigo_lote?.toLowerCase().includes(q) ||
       l.variedad?.toLowerCase().includes(q) ||
@@ -74,41 +75,11 @@ export default function AddOrderModal({ sesionId, lotes, referencias, clientes, 
     );
   });
 
-  // Calculate total target weight
-  const targetWeight = selectedLotes.reduce((sum, sl) => sum + (Number(sl.weight) || 0), 0);
-
-  // Suggest partitions
-  const handlePartitionsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setPartitions(e.target.value === '' ? '' : Number(e.target.value));
-    setIsPartitionsModified(true);
-  };
-
-  const weightPerBatch = targetWeight && partitions ? (targetWeight / Number(partitions)) : 0;
+  const weightPerBatch = targetWeight && partitions ? (Number(targetWeight) / Number(partitions)) : 0;
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!isNewLote && selectedLotes.length === 0) {
-      alert("Debes seleccionar al menos un lote o crear uno nuevo.");
-      return;
-    }
     const formData = new FormData(e.currentTarget);
-    
-    // Pass the selected lotes as JSON
-    if (!isNewLote) {
-      const lotesData = selectedLotes.map(sl => ({
-        id: sl.lote.id,
-        codigo_lote: sl.lote.codigo_lote,
-        peso: Number(sl.weight) || 0,
-        variedad: sl.lote.variedad,
-        productor: sl.lote.productor,
-        proceso: sl.lote.proceso
-      }));
-      formData.append('lotes_origen', JSON.stringify(lotesData));
-      // For backwards compatibility and main reference, send the first lot's code
-      formData.append('codigo_lote', selectedLotes[0]?.lote.codigo_lote || '');
-    }
-    
-    formData.append('target_weight_calc', targetWeight.toString());
     
     startTransition(async () => {
       const res = await addOrdenTueste(sesionId, formData);
@@ -140,13 +111,13 @@ export default function AddOrderModal({ sesionId, lotes, referencias, clientes, 
           {/* Lote Selector */}
           <div>
             <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-medium text-gray-400">Seleccionar Lotes Verdes *</label>
+              <label className="block text-sm font-medium text-gray-400">Lote de Café Verde *</label>
               <button
                 type="button"
-                onClick={() => { setIsNewLote(!isNewLote); setSelectedLotes([]); setLoteSearchQuery(''); }}
+                onClick={() => { setIsNewLote(!isNewLote); setSelectedLoteCode(''); setSelectedLote(null); setLoteSearchQuery(''); }}
                 className="text-xs text-[#c2a077] hover:text-white transition-colors"
               >
-                {isNewLote ? '← Cancelar Nuevo Lote' : '+ Crear Nuevo Lote (Sin Stock)'}
+                {isNewLote ? '← Cancelar Nuevo Lote' : '+ Crear Nuevo Lote'}
               </button>
             </div>
             
@@ -173,111 +144,91 @@ export default function AddOrderModal({ sesionId, lotes, referencias, clientes, 
                     <input type="text" name="new_productor" placeholder="Ej: Juan Perez" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-[#c2a077]" />
                   </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Peso (KG) *</label>
-                  <input type="number" step="0.01" name="target_weight" required placeholder="50.00" className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-[#c2a077]" />
-                </div>
               </div>
             ) : (
-              <div className="space-y-3">
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={loteSearchQuery}
-                    onChange={(e) => { setLoteSearchQuery(e.target.value); setIsDropdownOpen(true); }}
-                    onFocus={() => setIsDropdownOpen(true)}
-                    placeholder="Buscar y añadir lote (código, variedad, productor)..."
-                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#c2a077] transition-all"
-                  />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={loteSearchQuery}
+                  onChange={(e) => { setLoteSearchQuery(e.target.value); if (e.target.value === '') { setSelectedLoteCode(''); setSelectedLote(null); } setIsDropdownOpen(true); }}
+                  onFocus={() => setIsDropdownOpen(true)}
+                  placeholder="Buscar por código, variedad, productor..."
+                  className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#c2a077] transition-all"
+                />
+                <input type="hidden" name="codigo_lote" value={selectedLoteCode} required />
 
-                  {isDropdownOpen && (
-                    <>
-                      <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)} />
-                      <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-[#1a120b] border border-white/10 rounded-xl shadow-2xl z-20 divide-y divide-white/5">
-                        {filteredLotes.map(l => (
-                          <div
-                            key={l.id}
-                            onClick={() => handleLoteSelect(l)}
-                            className="p-3 hover:bg-[#c2a077]/10 cursor-pointer flex justify-between items-center text-xs text-gray-300 transition-colors"
-                          >
-                            <div>
-                              <span className="font-mono font-bold text-white text-sm block">{l.codigo_lote}</span>
-                              <span className="block mt-0.5 text-[10px] text-gray-400">Dueño: {l.propietario || 'N/A'} • {l.variedad} • {l.productor} • {l.proceso}</span>
-                            </div>
-                            <span className="text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded text-gray-400 font-mono">
-                              Disp: {(Number(l.stock_real) || 0).toFixed(1)} kg
-                            </span>
-                          </div>
-                        ))}
-                        {filteredLotes.length === 0 && (
-                          <div className="p-3 text-gray-500 text-center text-xs">No encontrado.</div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                {/* Selected Lotes List */}
-                {selectedLotes.length > 0 && (
-                  <div className="bg-[#c2a077]/5 border border-[#c2a077]/20 rounded-xl p-3 space-y-2">
-                    <div className="text-xs text-gray-400 font-semibold mb-2">Lotes Seleccionados (Consolidación / Blend)</div>
-                    {selectedLotes.map((sl, index) => (
-                      <div key={sl.lote.id} className="flex items-center gap-3 bg-black/30 p-2 rounded-lg border border-white/5">
-                        <div className="flex-1">
-                          <div className="text-sm font-bold text-white font-mono">{sl.lote.codigo_lote}</div>
-                          <div className="text-[10px] text-gray-400">{sl.lote.variedad} • {sl.lote.productor}</div>
+              {isDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-10" onClick={() => setIsDropdownOpen(false)} />
+                  <div className="absolute left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-[#1a120b] border border-white/10 rounded-xl shadow-2xl z-20 divide-y divide-white/5">
+                    {filteredLotes.map(l => (
+                      <div
+                        key={l.id}
+                        onClick={() => handleLoteSelect(l)}
+                        className="p-3 hover:bg-[#c2a077]/10 cursor-pointer flex justify-between items-center text-xs text-gray-300 transition-colors"
+                      >
+                        <div>
+                          <span className="font-mono font-bold text-white text-sm block">{l.codigo_lote}</span>
+                          <span className="block mt-0.5 text-[10px] text-gray-400">Dueño: {l.propietario || 'N/A'} • {l.variedad} • {l.productor} • {l.proceso}</span>
                         </div>
-                        <div className="w-24">
-                          <input 
-                            type="number" 
-                            step="0.01" 
-                            required
-                            placeholder="KG"
-                            value={sl.weight}
-                            onChange={(e) => handleWeightChange(sl.lote.id, e.target.value)}
-                            max={Number(sl.lote.stock_real) || 0}
-                            className="w-full bg-black/50 border border-white/10 rounded px-2 py-1.5 text-white focus:outline-none focus:border-[#c2a077] text-sm text-right"
-                          />
-                        </div>
-                        <div className="text-xs text-gray-500 w-16 text-right">
-                          / {(Number(sl.lote.stock_real) || 0).toFixed(1)}
-                        </div>
-                        <button type="button" onClick={() => handleRemoveLote(sl.lote.id)} className="text-red-400 hover:text-red-300 px-1">
-                          ✕
-                        </button>
+                        <span className="text-[10px] bg-white/5 border border-white/10 px-2 py-0.5 rounded text-gray-400 font-mono">
+                          Stock: {(Number(l.stock_real) || 0).toFixed(1)} kg
+                        </span>
                       </div>
                     ))}
-                    <div className="flex justify-between items-center pt-2 mt-2 border-t border-[#c2a077]/20">
-                      <span className="text-sm text-[#c2a077] font-bold">Total a Extraer:</span>
-                      <span className="text-lg font-extrabold text-white">{targetWeight.toFixed(2)} kg</span>
-                    </div>
+                    {filteredLotes.length === 0 && (
+                      <div className="p-3 text-gray-500 text-center text-xs">No encontrado.</div>
+                    )}
                   </div>
-                )}
-              </div>
+                </>
+              )}
+            </div>
             )}
           </div>
 
+          {/* Selected Lote Info */}
+          {selectedLote && (
+            <div className="bg-[#c2a077]/10 border border-[#c2a077]/30 rounded-2xl p-3 flex justify-between items-center">
+              <div>
+                <div className="text-xs text-gray-400 uppercase tracking-widest font-semibold">Stock Verde Disponible</div>
+                <div className="text-lg font-extrabold text-white mt-0.5">{(Number(selectedLote.stock_real) || 0).toFixed(2)} kg</div>
+              </div>
+              <span className="px-2.5 py-1 bg-[#c2a077]/20 text-[#c2a077] text-xs font-semibold rounded-full border border-[#c2a077]/30">
+                {(selectedLote.proceso || '').toUpperCase()}
+              </span>
+            </div>
+          )}
+
           {/* Weight & Partitions */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-400 mb-2">Masa Verde (KG) *</label>
+              <input type="number" step="0.01" name="target_weight" required
+                value={targetWeight}
+                onChange={handleWeightChange}
+                placeholder="50.00"
+                className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-[#c2a077]"
+              />
+            </div>
             <div>
               <div className="flex justify-between items-center mb-2">
                 <label className="block text-sm font-medium text-gray-400">Batches *</label>
-                {equipoCapacidad && equipoCapacidad > 0 && targetWeight > 0 && (
+                {equipoCapacidad && equipoCapacidad > 0 && targetWeight !== '' && (
                   <button
                     type="button"
                     onClick={() => {
-                      const suggested = Math.ceil(targetWeight / equipoCapacidad);
+                      const suggested = Math.ceil(Number(targetWeight) / equipoCapacidad);
                       setPartitions(suggested);
                       setIsPartitionsModified(false);
                     }}
                     className="text-[10px] text-[#c2a077] hover:underline"
                     title="Restablecer sugerencia según capacidad"
                   >
-                    Sugerido: {Math.ceil(targetWeight / equipoCapacidad)}
+                    Sugerido: {Math.ceil(Number(targetWeight) / equipoCapacidad)}
                   </button>
                 )}
               </div>
-              <input type="number" name="partitions" required min="1"
+              <input type="number" name="partitions" required
                 value={partitions}
                 onChange={handlePartitionsChange}
                 placeholder="1"
@@ -344,7 +295,7 @@ export default function AddOrderModal({ sesionId, lotes, referencias, clientes, 
             >
               <option value="">-- Sin Referencia --</option>
               {filteredReferences.map(ref => {
-                const isRecommended = selectedLotes.length > 0 && selectedLotes.some(sl => ref.variedad?.toLowerCase() === sl.lote.variedad?.toLowerCase());
+                const isRecommended = selectedLote && ref.variedad?.toLowerCase() === selectedLote.variedad?.toLowerCase();
                 return (
                   <option key={ref.id} value={ref.id}>
                     {isRecommended ? '⭐ ' : ''}{ref.nombre_referencia} ({ref.variedad} - {ref.codigo_lote})
@@ -361,7 +312,7 @@ export default function AddOrderModal({ sesionId, lotes, referencias, clientes, 
             >
               Cancelar
             </button>
-            <button type="submit" disabled={isPending || (!isNewLote && selectedLotes.length === 0)}
+            <button type="submit" disabled={isPending || (!selectedLoteCode && !isNewLote)}
               className="px-6 py-2.5 bg-[#c2a077] hover:bg-[#b08f65] text-[#1a120b] font-extrabold rounded-xl transition-all shadow-lg shadow-[#c2a077]/10 disabled:opacity-50"
             >
               {isPending ? 'Creando...' : 'Crear Orden'}
